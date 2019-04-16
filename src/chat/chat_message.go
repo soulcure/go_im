@@ -8,7 +8,7 @@ import (
 
 const (
 	// ChatMessage is the message number of chat message.
-	ChatMessage int32 = 1
+	ChatMessage int16 = 1
 )
 
 // Message defines the chat message.
@@ -17,7 +17,7 @@ type Message struct {
 }
 
 // MessageNumber returns the message number.
-func (cm Message) MessageNumber() int32 {
+func (cm Message) MessageNumber() int16 {
 	return ChatMessage
 }
 

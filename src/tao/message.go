@@ -42,11 +42,11 @@ var (
 	buf *bytes.Buffer
 	// messageRegistry is the registry of all
 	// message-related unmarshal and handle functions.
-	messageRegistry map[int32]handlerUnmarshaler
+	messageRegistry map[int16]handlerUnmarshaler
 )
 
 func init() {
-	messageRegistry = map[int32]handlerUnmarshaler{}
+	messageRegistry = map[int16]handlerUnmarshaler{}
 	buf = new(bytes.Buffer)
 }
 
@@ -55,7 +55,7 @@ func init() {
 // If no handler function provided, the message will not be handled unless you
 // set a default one by calling SetOnMessageCallback.
 // If Register being called twice on one msgType, it will panics.
-func Register(msgType int32, unmarshaler func([]byte) (Message, error), handler func(context.Context, WriteCloser)) {
+func Register(msgType int16, unmarshaler func([]byte) (Message, error), handler func(context.Context, WriteCloser)) {
 	if _, ok := messageRegistry[msgType]; ok {
 		panic(fmt.Sprintf("trying to register message %d twice", msgType))
 	}
@@ -67,7 +67,7 @@ func Register(msgType int32, unmarshaler func([]byte) (Message, error), handler 
 }
 
 // GetUnmarshalFunc returns the corresponding unmarshal function for msgType.
-func GetUnmarshalFunc(msgType int32) UnmarshalFunc {
+func GetUnmarshalFunc(msgType int16) UnmarshalFunc {
 	entry, ok := messageRegistry[msgType]
 	if !ok {
 		return nil
@@ -76,7 +76,7 @@ func GetUnmarshalFunc(msgType int32) UnmarshalFunc {
 }
 
 // GetHandlerFunc returns the corresponding handler function for msgType.
-func GetHandlerFunc(msgType int32) HandlerFunc {
+func GetHandlerFunc(msgType int16) HandlerFunc {
 	entry, ok := messageRegistry[msgType]
 	if !ok {
 		return nil
@@ -86,7 +86,7 @@ func GetHandlerFunc(msgType int32) HandlerFunc {
 
 // Message represents the structured data that can be handled.
 type Message interface {
-	MessageNumber() int32
+	MessageNumber() int16
 	Serialize() ([]byte, error)
 }
 
@@ -106,7 +106,7 @@ func (hbm HeartBeatMessage) Serialize() ([]byte, error) {
 }
 
 // MessageNumber returns message number.
-func (hbm HeartBeatMessage) MessageNumber() int32 {
+func (hbm HeartBeatMessage) MessageNumber() int16 {
 	return HeartBeat
 }
 
@@ -154,7 +154,7 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 	errorChan := make(chan error)
 
 	go func(bc chan []byte, ec chan error) {
-		typeData := make([]byte, MessageTypeBytes)
+		typeData := make([]byte, 2)
 		_, err := io.ReadFull(raw, typeData)
 		if err != nil {
 			ec <- err
@@ -177,10 +177,26 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 			logger.Warnln("read type bytes nil")
 			return nil, ErrBadData
 		}
-		typeBuf := bytes.NewReader(typeBytes)
-		var msgType int32
-		if err := binary.Read(typeBuf, binary.LittleEndian, &msgType); err != nil {
+
+		flagBuf := bytes.NewReader(typeBytes)
+		var msgFlag uint16
+		if err := binary.Read(flagBuf, binary.LittleEndian, &msgFlag); err != nil {
 			return nil, err
+		}
+
+		if msgFlag != MessageHeaderFlag {
+			return nil, ErrUndefined(MessageHeaderFlag)
+		}
+
+		commandIdBytes := make([]byte, MessageCommandId)
+		_, e := io.ReadFull(raw, commandIdBytes)
+		if e != nil {
+			return nil, e
+		}
+		lenBuf := bytes.NewReader(commandIdBytes)
+		var commandId int16
+		if e = binary.Read(lenBuf, binary.LittleEndian, &commandId); e != nil {
+			return nil, e
 		}
 
 		lengthBytes := make([]byte, MessageLenBytes)
@@ -193,8 +209,9 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 		if err = binary.Read(lengthBuf, binary.LittleEndian, &msgLen); err != nil {
 			return nil, err
 		}
+
 		if msgLen > MessageMaxBytes {
-			logger.Errorf("message(type %d) has bytes(%d) beyond max %d\n", msgType, msgLen, MessageMaxBytes)
+			logger.Errorf("message(type %d) has bytes(%d) beyond max %d\n", commandId, msgLen, MessageMaxBytes)
 			return nil, ErrBadData
 		}
 
@@ -206,9 +223,9 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 		}
 
 		// deserialize message from bytes
-		unmarshaler := GetUnmarshalFunc(msgType)
+		unmarshaler := GetUnmarshalFunc(commandId)
 		if unmarshaler == nil {
-			return nil, ErrUndefined(msgType)
+			return nil, ErrUndefined(commandId)
 		}
 		return unmarshaler(msgBytes)
 	}

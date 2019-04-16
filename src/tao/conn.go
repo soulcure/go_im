@@ -11,12 +11,14 @@ import (
 )
 
 const (
+	//MessageHeaderFlagBytes is the beginning of the header of the protocol packet
+	MessageHeaderFlag uint16 = 0xFFAA
 	// MessageTypeBytes is the length of type header.
-	MessageTypeBytes = 4
+	MessageCommandId int16 = 2
 	// MessageLenBytes is the length of length header.
-	MessageLenBytes = 4
+	MessageLenBytes int32 = 4
 	// MessageMaxBytes is the maximum bytes allowed for application data.
-	MessageMaxBytes = 1 << 23 // 8M
+	MessageMaxBytes uint32 = 1 << 23 // 8M
 )
 
 // MessageHandler is a combination of message and its handler function.

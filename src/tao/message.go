@@ -178,9 +178,9 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 			return nil, ErrBadData
 		}
 
-		flagBuf := bytes.NewReader(typeBytes)
+		flagReader := bytes.NewReader(typeBytes)
 		var msgFlag uint16
-		if err := binary.Read(flagBuf, binary.LittleEndian, &msgFlag); err != nil {
+		if err := binary.Read(flagReader, binary.LittleEndian, &msgFlag); err != nil {
 			return nil, err
 		}
 
@@ -193,20 +193,20 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 		if e != nil {
 			return nil, e
 		}
-		lenBuf := bytes.NewReader(commandIdBytes)
+		commandIdReader := bytes.NewReader(commandIdBytes)
 		var commandId int16
-		if e = binary.Read(lenBuf, binary.LittleEndian, &commandId); e != nil {
+		if e = binary.Read(commandIdReader, binary.LittleEndian, &commandId); e != nil {
 			return nil, e
 		}
 
-		lengthBytes := make([]byte, MessageLenBytes)
-		_, err := io.ReadFull(raw, lengthBytes)
+		lenBytes := make([]byte, MessageLenBytes)
+		_, err := io.ReadFull(raw, lenBytes)
 		if err != nil {
 			return nil, err
 		}
-		lengthBuf := bytes.NewReader(lengthBytes)
+		lenReader := bytes.NewReader(lenBytes)
 		var msgLen uint32
-		if err = binary.Read(lengthBuf, binary.LittleEndian, &msgLen); err != nil {
+		if err = binary.Read(lenReader, binary.LittleEndian, &msgLen); err != nil {
 			return nil, err
 		}
 

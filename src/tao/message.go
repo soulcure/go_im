@@ -179,7 +179,7 @@ func (codec TypeLengthValueCodec) Decode(raw net.Conn) (Message, error) {
 		}
 
 		flagReader := bytes.NewReader(typeBytes)
-		var msgFlag uint16
+		var msgFlag int16
 		if err := binary.Read(flagReader, binary.LittleEndian, &msgFlag); err != nil {
 			return nil, err
 		}
@@ -238,8 +238,15 @@ func (codec TypeLengthValueCodec) Encode(msg Message) ([]byte, error) {
 		return nil, err
 	}
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, msg.MessageNumber())
-	binary.Write(buf, binary.LittleEndian, int32(len(data)))
+	if err = binary.Write(buf, binary.LittleEndian, MessageHeaderFlag); err != nil {
+		return nil, err
+	}
+	if err = binary.Write(buf, binary.LittleEndian, msg.MessageNumber()); err != nil {
+		return nil, err
+	}
+	if err = binary.Write(buf, binary.LittleEndian, int32(len(data))); err != nil {
+		return nil, err
+	}
 	buf.Write(data)
 	packet := buf.Bytes()
 	return packet, nil

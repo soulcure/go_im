@@ -12,7 +12,7 @@ import (
 
 const (
 	//MessageHeaderFlagBytes is the beginning of the header of the protocol packet
-	MessageHeaderFlag uint16 = 0xFFAA
+	MessageHeaderFlag int16 = 0x1234
 	// MessageTypeBytes is the length of type header.
 	MessageCommandId int16 = 2
 	// MessageLenBytes is the length of length header.

@@ -109,17 +109,17 @@ func OnErrorOption(cb func(WriteCloser)) ServerOption {
 
 // Server  is a server to serve TCP requests.
 type Server struct {
-	opts   options
-	ctx    context.Context
-	cancel context.CancelFunc
-	conns  *sync.Map
-	timing *TimingWheel
-	wg     *sync.WaitGroup
-	mu     sync.Mutex // guards following
-	lis    map[net.Listener]bool
+	opts     options
+	ctx      context.Context
+	cancel   context.CancelFunc
+	connects *sync.Map
+	timing   *TimingWheel
+	wg       *sync.WaitGroup
+	mu       sync.Mutex // guards following
+	lis      map[net.Listener]bool
 	// for periodically running function every duration.
-	interv time.Duration
-	sched  onScheduleFunc
+	duration     time.Duration
+	scheduleFunc onScheduleFunc
 }
 
 // NewServer returns a new TCP server which has not started
@@ -144,10 +144,10 @@ func NewServer(opt ...ServerOption) *Server {
 	globalWorkerPool = newWorkerPool(opts.workerSize)
 
 	s := &Server{
-		opts:  opts,
-		conns: &sync.Map{},
-		wg:    &sync.WaitGroup{},
-		lis:   make(map[net.Listener]bool),
+		opts:     opts,
+		connects: &sync.Map{},
+		wg:       &sync.WaitGroup{},
+		lis:      make(map[net.Listener]bool),
 	}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.timing = NewTimingWheel(s.ctx)
@@ -157,7 +157,7 @@ func NewServer(opt ...ServerOption) *Server {
 // ConnsSize returns connections size.
 func (s *Server) ConnsSize() int {
 	var sz int
-	s.conns.Range(func(k, v interface{}) bool {
+	s.connects.Range(func(k, v interface{}) bool {
 		sz++
 		return true
 	})
@@ -168,13 +168,13 @@ func (s *Server) ConnsSize() int {
 func (s *Server) Sched(dur time.Duration, sched func(time.Time, WriteCloser)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.interv = dur
-	s.sched = onScheduleFunc(sched)
+	s.duration = dur
+	s.scheduleFunc = onScheduleFunc(sched)
 }
 
 // Broadcast broadcasts message to all server connections managed.
 func (s *Server) Broadcast(msg Message) {
-	s.conns.Range(func(k, v interface{}) bool {
+	s.connects.Range(func(k, v interface{}) bool {
 		c := v.(*ServerConn)
 		if err := c.Write(msg); err != nil {
 			logger.Errorf("broadcast error %v, conn id %d", err, k.(int64))
@@ -186,7 +186,7 @@ func (s *Server) Broadcast(msg Message) {
 
 // Unicast unicasts message to a specified conn.
 func (s *Server) Unicast(id int64, msg Message) error {
-	v, ok := s.conns.Load(id)
+	v, ok := s.connects.Load(id)
 	if ok {
 		return v.(*ServerConn).Write(msg)
 	}
@@ -195,7 +195,7 @@ func (s *Server) Unicast(id int64, msg Message) error {
 
 // Conn returns a server connection with specified ID.
 func (s *Server) Conn(id int64) (*ServerConn, bool) {
-	v, ok := s.conns.Load(id)
+	v, ok := s.connects.Load(id)
 	if ok {
 		return v.(*ServerConn), ok
 	}
@@ -266,17 +266,17 @@ func (s *Server) Start(l net.Listener) error {
 			rawConn = tls.Server(rawConn, s.opts.tlsCfg)
 		}
 
-		netid := netIdentifier.GetAndIncrement()
-		sc := NewServerConn(netid, s, rawConn)
+		netId := netIdentifier.GetAndIncrement()
+		sc := NewServerConn(netId, s, rawConn)
 		sc.SetName(sc.rawConn.RemoteAddr().String())
 
 		s.mu.Lock()
-		if s.sched != nil {
-			sc.RunEvery(s.interv, s.sched)
+		if s.scheduleFunc != nil {
+			sc.RunEvery(s.duration, s.scheduleFunc)
 		}
 		s.mu.Unlock()
 
-		s.conns.Store(netid, sc)
+		s.connects.Store(netId, sc)
 		addTotalConn(1)
 
 		s.wg.Add(1) // this will be Done() in ServerConn.Close()
@@ -284,8 +284,8 @@ func (s *Server) Start(l net.Listener) error {
 			sc.Start()
 		}()
 
-		logger.Infof("accepted client %s, id %d, total %d\n", sc.Name(), netid, s.ConnsSize())
-		s.conns.Range(func(k, v interface{}) bool {
+		logger.Infof("accepted client %s, id %d, total %d\n", sc.Name(), netId, s.ConnsSize())
+		s.connects.Range(func(k, v interface{}) bool {
 			i := k.(int64)
 			c := v.(*ServerConn)
 			logger.Infof("client(%d) %s", i, c.Name())
@@ -311,14 +311,14 @@ func (s *Server) Stop() {
 	// close all connections
 	conns := map[int64]*ServerConn{}
 
-	s.conns.Range(func(k, v interface{}) bool {
+	s.connects.Range(func(k, v interface{}) bool {
 		i := k.(int64)
 		c := v.(*ServerConn)
 		conns[i] = c
 		return true
 	})
 	// let GC do the cleanings
-	s.conns = nil
+	s.connects = nil
 
 	for _, c := range conns {
 		c.rawConn.Close()
@@ -348,7 +348,7 @@ func (s *Server) timeOutLoop() {
 
 		case timeout := <-s.timing.TimeOutChannel():
 			netID := timeout.Ctx.Value(netIDCtx).(int64)
-			if v, ok := s.conns.Load(netID); ok {
+			if v, ok := s.connects.Load(netID); ok {
 				sc := v.(*ServerConn)
 				sc.timerCh <- timeout
 			} else {

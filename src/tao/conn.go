@@ -35,7 +35,7 @@ type WriteCloser interface {
 
 // ServerConn represents a server connection to a TCP server, it implments Conn.
 type ServerConn struct {
-	netid   int64
+	netId   int64
 	belong  *Server
 	rawConn net.Conn
 
@@ -57,7 +57,7 @@ type ServerConn struct {
 // serve requests yet.
 func NewServerConn(id int64, s *Server, c net.Conn) *ServerConn {
 	sc := &ServerConn{
-		netid:     id,
+		netId:     id,
 		belong:    s,
 		rawConn:   c,
 		once:      &sync.Once{},
@@ -81,7 +81,7 @@ func ServerFromContext(ctx context.Context) (*Server, bool) {
 
 // NetID returns net ID of server connection.
 func (sc *ServerConn) NetID() int64 {
-	return sc.netid
+	return sc.netId
 }
 
 // SetName sets name of server connection.
@@ -158,7 +158,7 @@ func (sc *ServerConn) Close() {
 		}
 
 		// remove connection from server
-		sc.belong.conns.Delete(sc.netid)
+		sc.belong.connects.Delete(sc.netId)
 		addTotalConn(-1)
 
 		// close net.Conn, any blocked read or write operation will be unblocked and
@@ -210,7 +210,7 @@ func (sc *ServerConn) Write(message Message) error {
 
 // RunAt runs a callback at the specified timestamp.
 func (sc *ServerConn) RunAt(timestamp time.Time, callback func(time.Time, WriteCloser)) int64 {
-	id := runAt(sc.ctx, sc.netid, sc.belong.timing, timestamp, callback)
+	id := runAt(sc.ctx, sc.netId, sc.belong.timing, timestamp, callback)
 	if id >= 0 {
 		sc.AddPendingTimer(id)
 	}
@@ -219,7 +219,7 @@ func (sc *ServerConn) RunAt(timestamp time.Time, callback func(time.Time, WriteC
 
 // RunAfter runs a callback right after the specified duration ellapsed.
 func (sc *ServerConn) RunAfter(duration time.Duration, callback func(time.Time, WriteCloser)) int64 {
-	id := runAfter(sc.ctx, sc.netid, sc.belong.timing, duration, callback)
+	id := runAfter(sc.ctx, sc.netId, sc.belong.timing, duration, callback)
 	if id >= 0 {
 		sc.AddPendingTimer(id)
 	}
@@ -228,7 +228,7 @@ func (sc *ServerConn) RunAfter(duration time.Duration, callback func(time.Time, 
 
 // RunEvery runs a callback on every interval time.
 func (sc *ServerConn) RunEvery(interval time.Duration, callback func(time.Time, WriteCloser)) int64 {
-	id := runEvery(sc.ctx, sc.netid, sc.belong.timing, interval, callback)
+	id := runEvery(sc.ctx, sc.netId, sc.belong.timing, interval, callback)
 	if id >= 0 {
 		sc.AddPendingTimer(id)
 	}
@@ -713,7 +713,7 @@ func handleLoop(c WriteCloser, wg *sync.WaitGroup) {
 		sDone = c.belong.ctx.Done()
 		timerCh = c.timerCh
 		handlerCh = c.handlerCh
-		netID = c.netid
+		netID = c.netId
 		ctx = c.ctx
 		askForWorker = true
 	case *ClientConn:

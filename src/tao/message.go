@@ -259,7 +259,7 @@ type contextKey string
 const (
 	messageCtx contextKey = "message"
 	serverCtx  contextKey = "server"
-	netIDCtx   contextKey = "netid"
+	netIDCtx   contextKey = "netId"
 )
 
 // NewContextWithMessage returns a new Context that carries message.

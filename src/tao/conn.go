@@ -260,7 +260,7 @@ func (sc *ServerConn) LocalAddr() net.Addr {
 type ClientConn struct {
 	addr      string
 	opts      options
-	netid     int64
+	netId     int64
 	rawConn   net.Conn
 	once      *sync.Once
 	wg        *sync.WaitGroup
@@ -291,11 +291,11 @@ func NewClientConn(netid int64, c net.Conn, opt ...ServerOption) *ClientConn {
 	return newClientConnWithOptions(netid, c, opts)
 }
 
-func newClientConnWithOptions(netid int64, c net.Conn, opts options) *ClientConn {
+func newClientConnWithOptions(netId int64, c net.Conn, opts options) *ClientConn {
 	cc := &ClientConn{
 		addr:      c.RemoteAddr().String(),
 		opts:      opts,
-		netid:     netid,
+		netId:     netId,
 		rawConn:   c,
 		once:      &sync.Once{},
 		wg:        &sync.WaitGroup{},
@@ -312,7 +312,7 @@ func newClientConnWithOptions(netid int64, c net.Conn, opts options) *ClientConn
 
 // NetID returns the net ID of client connection.
 func (cc *ClientConn) NetID() int64 {
-	return cc.netid
+	return cc.netId
 }
 
 // SetName sets the name of client connection.
@@ -438,7 +438,7 @@ func (cc *ClientConn) reconnect() {
 	}
 	// copy the newly-created *ClientConn to cc, so after
 	// reconnect returned cc will be updated to new one.
-	*cc = *newClientConnWithOptions(cc.netid, c, cc.opts)
+	*cc = *newClientConnWithOptions(cc.netId, c, cc.opts)
 	cc.Start()
 }
 
@@ -449,7 +449,7 @@ func (cc *ClientConn) Write(message Message) error {
 
 // RunAt runs a callback at the specified timestamp.
 func (cc *ClientConn) RunAt(timestamp time.Time, callback func(time.Time, WriteCloser)) int64 {
-	id := runAt(cc.ctx, cc.netid, cc.timing, timestamp, callback)
+	id := runAt(cc.ctx, cc.netId, cc.timing, timestamp, callback)
 	if id >= 0 {
 		cc.AddPendingTimer(id)
 	}
@@ -458,7 +458,7 @@ func (cc *ClientConn) RunAt(timestamp time.Time, callback func(time.Time, WriteC
 
 // RunAfter runs a callback right after the specified duration ellapsed.
 func (cc *ClientConn) RunAfter(duration time.Duration, callback func(time.Time, WriteCloser)) int64 {
-	id := runAfter(cc.ctx, cc.netid, cc.timing, duration, callback)
+	id := runAfter(cc.ctx, cc.netId, cc.timing, duration, callback)
 	if id >= 0 {
 		cc.AddPendingTimer(id)
 	}
@@ -467,7 +467,7 @@ func (cc *ClientConn) RunAfter(duration time.Duration, callback func(time.Time, 
 
 // RunEvery runs a callback on every interval time.
 func (cc *ClientConn) RunEvery(interval time.Duration, callback func(time.Time, WriteCloser)) int64 {
-	id := runEvery(cc.ctx, cc.netid, cc.timing, interval, callback)
+	id := runEvery(cc.ctx, cc.netId, cc.timing, interval, callback)
 	if id >= 0 {
 		cc.AddPendingTimer(id)
 	}
@@ -721,7 +721,7 @@ func handleLoop(c WriteCloser, wg *sync.WaitGroup) {
 		sDone = nil
 		timerCh = c.timing.timeOutChan
 		handlerCh = c.handlerCh
-		netID = c.netid
+		netID = c.netId
 		ctx = c.ctx
 	}
 
